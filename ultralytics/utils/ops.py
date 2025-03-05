@@ -344,10 +344,9 @@ def clip_boxes(boxes, shape):
         (torch.Tensor | numpy.ndarray): The clipped boxes.
     """
     if isinstance(boxes, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
-        boxes[..., 0] = boxes[..., 0].clamp(0, shape[1])  # x1
-        boxes[..., 1] = boxes[..., 1].clamp(0, shape[0])  # y1
-        boxes[..., 2] = boxes[..., 2].clamp(0, shape[1])  # x2
-        boxes[..., 3] = boxes[..., 3].clamp(0, shape[0])  # y2
+        max_values = torch.tensor([shape[1], shape[0], shape[1], shape[0]], dtype=boxes.dtype, device=boxes.device)
+        boxes = torch.min(boxes, max_values)
+        boxes = torch.max(boxes, torch.zeros_like(boxes))
     else:  # np.array (faster grouped)
         boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])  # x1, x2
         boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])  # y1, y2
