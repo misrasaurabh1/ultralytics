@@ -479,8 +479,7 @@ class LoadPilAndNumpy:
         """Initializes a loader for PIL and Numpy images, converting inputs to a standardized format."""
         if not isinstance(im0, list):
             im0 = [im0]
-        # use `image{i}.jpg` when Image.filename returns an empty path.
-        self.paths = [getattr(im, "filename", "") or f"image{i}.jpg" for i, im in enumerate(im0)]
+        self.paths = [self._get_path(i, im) for i, im in enumerate(im0)]
         self.im0 = [self._single_check(im) for im in im0]
         self.mode = "image"
         self.bs = len(self.im0)
@@ -492,8 +491,11 @@ class LoadPilAndNumpy:
         if isinstance(im, Image.Image):
             if im.mode != "RGB":
                 im = im.convert("RGB")
-            im = np.asarray(im)[:, :, ::-1]
-            im = np.ascontiguousarray(im)  # contiguous
+            im = np.asarray(im)
+            if not im.flags["C_CONTIGUOUS"]:
+                im = np.ascontiguousarray(im[:, :, ::-1])
+            else:
+                im = im[:, :, ::-1]
         return im
 
     def __len__(self):
@@ -511,6 +513,11 @@ class LoadPilAndNumpy:
         """Iterates through PIL/numpy images, yielding paths, raw images, and metadata for processing."""
         self.count = 0
         return self
+
+    @staticmethod
+    def _get_path(index, im):
+        """Return the path for the image."""
+        return getattr(im, "filename", "") or f"image{index}.jpg"
 
 
 class LoadTensor:
