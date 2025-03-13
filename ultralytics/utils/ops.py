@@ -2,7 +2,6 @@
 
 import contextlib
 import math
-import re
 import time
 
 import cv2
@@ -861,7 +860,14 @@ def clean_str(s):
     Returns:
         (str): a string with special characters replaced by an underscore _
     """
-    return re.sub(pattern="[|@#!¡·$€%&()=?¿^*;:,¨´><+]", repl="_", string=s)
+    # Define the characters to be replaced
+    special_chars = "|@#!¡·$€%&()=?¿^*;:,¨´><+"
+
+    # Create the translation table: map each special character to '_'
+    trans_table = str.maketrans(special_chars, "_" * len(special_chars))
+
+    # Use the translation table to replace characters
+    return s.translate(trans_table)
 
 
 def empty_like(x):
