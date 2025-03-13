@@ -187,12 +187,22 @@ def _get_covariance_matrix(boxes):
     """
     # Gaussian bounding boxes, ignore the center points (the first two columns) because they are not needed here.
     gbbs = torch.cat((boxes[:, 2:4].pow(2) / 12, boxes[:, 4:]), dim=-1)
-    a, b, c = gbbs.split(1, dim=-1)
+    a, b, c = gbbs.unbind(dim=-1)
+
+    # Precompute cos and sin values to avoid recomputation
     cos = c.cos()
     sin = c.sin()
-    cos2 = cos.pow(2)
-    sin2 = sin.pow(2)
-    return a * cos2 + b * sin2, a * sin2 + b * cos2, (a - b) * cos * sin
+    cos2 = cos * cos
+    sin2 = sin * sin
+
+    # Use in-place operations to save memory and time
+    a_times_cos2 = a * cos2
+    b_times_sin2 = b * sin2
+    a_times_sin2 = a * sin2
+    b_times_cos2 = b * cos2
+    ab_cos_sin = (a - b) * cos * sin
+
+    return a_times_cos2 + b_times_sin2, a_times_sin2 + b_times_cos2, ab_cos_sin
 
 
 def probiou(obb1, obb2, CIoU=False, eps=1e-7):
