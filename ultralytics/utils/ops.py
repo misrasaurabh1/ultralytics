@@ -365,12 +365,15 @@ def clip_coords(coords, shape):
     Returns:
         (torch.Tensor | numpy.ndarray): Clipped coordinates
     """
+    height, width = shape
+
     if isinstance(coords, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
-        coords[..., 0] = coords[..., 0].clamp(0, shape[1])  # x
-        coords[..., 1] = coords[..., 1].clamp(0, shape[0])  # y
+        coords[..., 0].clamp_(0, width)  # x
+        coords[..., 1].clamp_(0, height)  # y
     else:  # np.array (faster grouped)
-        coords[..., 0] = coords[..., 0].clip(0, shape[1])  # x
-        coords[..., 1] = coords[..., 1].clip(0, shape[0])  # y
+        np.clip(coords[..., 0], 0, width, out=coords[..., 0])  # x
+        np.clip(coords[..., 1], 0, height, out=coords[..., 1])  # y
+
     return coords
 
 
