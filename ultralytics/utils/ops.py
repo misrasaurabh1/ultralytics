@@ -344,13 +344,12 @@ def clip_boxes(boxes, shape):
         (torch.Tensor | numpy.ndarray): The clipped boxes.
     """
     if isinstance(boxes, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
-        boxes[..., 0] = boxes[..., 0].clamp(0, shape[1])  # x1
-        boxes[..., 1] = boxes[..., 1].clamp(0, shape[0])  # y1
-        boxes[..., 2] = boxes[..., 2].clamp(0, shape[1])  # x2
-        boxes[..., 3] = boxes[..., 3].clamp(0, shape[0])  # y2
+        # Use a single clamp operation for all coordinates
+        boxes[..., 0::2] = torch.clamp(boxes[..., 0::2], 0, shape[1])  # x1, x2
+        boxes[..., 1::2] = torch.clamp(boxes[..., 1::2], 0, shape[0])  # y1, y2
     else:  # np.array (faster grouped)
-        boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])  # x1, x2
-        boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])  # y1, y2
+        boxes[..., 0::2] = boxes[..., 0::2].clip(0, shape[1])  # x1, x2
+        boxes[..., 1::2] = boxes[..., 1::2].clip(0, shape[0])  # y1, y2
     return boxes
 
 
