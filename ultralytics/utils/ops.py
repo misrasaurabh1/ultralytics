@@ -793,14 +793,14 @@ def regularize_rboxes(rboxes):
     Regularize rotated boxes in range [0, pi/2].
 
     Args:
-        rboxes (torch.Tensor): Input boxes of shape(N, 5) in xywhr format.
+        rboxes (torch.Tensor): Input boxes of shape (N, 5) in xywhr format.
 
     Returns:
         (torch.Tensor): The regularized boxes.
     """
     x, y, w, h, t = rboxes.unbind(dim=-1)
     # Swap edge if t >= pi/2 while not being symmetrically opposite
-    swap = t % math.pi >= math.pi / 2
+    swap = t >= math.pi / 2
     w_ = torch.where(swap, h, w)
     h_ = torch.where(swap, w, h)
     t = t % (math.pi / 2)
