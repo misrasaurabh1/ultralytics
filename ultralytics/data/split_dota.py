@@ -8,10 +8,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+from shapely.geometry import Polygon
 
 from ultralytics.data.utils import exif_size, img2label_paths
 from ultralytics.utils import TQDM
-from ultralytics.utils.checks import check_requirements
 
 
 def bbox_iof(polygon1, bbox2, eps=1e-6):
@@ -30,35 +30,31 @@ def bbox_iof(polygon1, bbox2, eps=1e-6):
         Polygon format: [x1, y1, x2, y2, x3, y3, x4, y4].
         Bounding box format: [x_min, y_min, x_max, y_max].
     """
-    check_requirements("shapely")
-    from shapely.geometry import Polygon
-
     polygon1 = polygon1.reshape(-1, 4, 2)
     lt_point = np.min(polygon1, axis=-2)  # left-top
     rb_point = np.max(polygon1, axis=-2)  # right-bottom
     bbox1 = np.concatenate([lt_point, rb_point], axis=-1)
 
-    lt = np.maximum(bbox1[:, None, :2], bbox2[..., :2])
-    rb = np.minimum(bbox1[:, None, 2:], bbox2[..., 2:])
+    lt = np.maximum(bbox1[:, None, :2], bbox2[:, :2])
+    rb = np.minimum(bbox1[:, None, 2:], bbox2[:, 2:])
     wh = np.clip(rb - lt, 0, np.inf)
     h_overlaps = wh[..., 0] * wh[..., 1]
 
-    left, top, right, bottom = (bbox2[..., i] for i in range(4))
+    left, top, right, bottom = bbox2.T
     polygon2 = np.stack([left, top, right, top, right, bottom, left, bottom], axis=-1).reshape(-1, 4, 2)
 
     sg_polys1 = [Polygon(p) for p in polygon1]
     sg_polys2 = [Polygon(p) for p in polygon2]
-    overlaps = np.zeros(h_overlaps.shape)
-    for p in zip(*np.nonzero(h_overlaps)):
-        overlaps[p] = sg_polys1[p[0]].intersection(sg_polys2[p[-1]]).area
-    unions = np.array([p.area for p in sg_polys1], dtype=np.float32)
-    unions = unions[..., None]
 
+    overlaps = np.zeros(h_overlaps.shape)
+    for i, j in zip(*np.nonzero(h_overlaps)):
+        overlaps[i, j] = sg_polys1[i].intersection(sg_polys2[j]).area
+
+    unions = np.array([p.area for p in sg_polys1], dtype=np.float32)[..., None]
     unions = np.clip(unions, eps, np.inf)
+
     outputs = overlaps / unions
-    if outputs.ndim == 1:
-        outputs = outputs[..., None]
-    return outputs
+    return outputs[..., None] if outputs.ndim == 1 else outputs
 
 
 def load_yolo_dota(data_root, split="train"):
