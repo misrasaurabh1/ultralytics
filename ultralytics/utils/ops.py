@@ -668,12 +668,19 @@ def crop_mask(masks, boxes):
     Returns:
         (torch.Tensor): The masks are being cropped to the bounding box.
     """
-    _, h, w = masks.shape
-    x1, y1, x2, y2 = torch.chunk(boxes[:, :, None], 4, 1)  # x1 shape(n,1,1)
-    r = torch.arange(w, device=masks.device, dtype=x1.dtype)[None, None, :]  # rows shape(1,1,w)
-    c = torch.arange(h, device=masks.device, dtype=x1.dtype)[None, :, None]  # cols shape(1,h,1)
+    n, h, w = masks.shape
+    x1, y1, x2, y2 = boxes.unbind(dim=1)  # split the second dimension
 
-    return masks * ((r >= x1) * (r < x2) * (c >= y1) * (c < y2))
+    rows = torch.arange(w, device=masks.device, dtype=x1.dtype)  # shape (w,)
+    cols = torch.arange(h, device=masks.device, dtype=x1.dtype)  # shape (h,)
+
+    # Use broadcasting logic for optimized comparison
+    mask = ((rows >= x1[:, None]) & (rows < x2[:, None]) & (cols >= y1[:, None]) & (cols < y2[:, None])).to(masks.dtype)
+
+    # Add dimensions for the batch and apply mask
+    crop_masks = masks * mask[:, :, None] * mask[:, None, :]
+
+    return crop_masks
 
 
 def process_mask(protos, masks_in, bboxes, shape, upsample=False):
