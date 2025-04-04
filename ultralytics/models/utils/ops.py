@@ -75,12 +75,14 @@ class HungarianMatcher(nn.Module):
         if all(g == 0 for g in gt_groups):
             return [(torch.tensor([], dtype=torch.long), torch.tensor([], dtype=torch.long)) for _ in range(bs)]
 
-        # Flatten to compute the cost matrices in a batch
+        # We flatten to compute the cost matrices in a batch
+        # [batch_size * num_queries, num_classes]
         pred_scores = pred_scores.view(-1, nc).detach()
         pred_scores = F.sigmoid(pred_scores) if self.use_fl else F.softmax(pred_scores, dim=-1)
+        # [batch_size * num_queries, 4]
         pred_bboxes = pred_bboxes.view(-1, 4).detach()
 
-        # Compute classification cost
+        # Compute the classification cost
         pred_scores = pred_scores[:, gt_cls]
         if self.use_fl:
             neg_cost_class = (1 - self.alpha) * (pred_scores**self.gamma) * (-(1 - pred_scores + 1e-8).log())
@@ -92,7 +94,7 @@ class HungarianMatcher(nn.Module):
         # Compute the L1 cost between boxes
         cost_bbox = torch.cdist(pred_bboxes, gt_bboxes, p=1)
 
-        # Compute the GIoU cost between boxes
+        # Compute the GIoU cost between boxes, (bs*num_queries, num_gt)
         cost_giou = 1.0 - bbox_iou(pred_bboxes[:, None, :], gt_bboxes[None, :, :], xywh=True, GIoU=True)
 
         # Final cost matrix
@@ -101,9 +103,12 @@ class HungarianMatcher(nn.Module):
             + self.cost_gain["bbox"] * cost_bbox
             + self.cost_gain["giou"] * cost_giou
         )
-
+        # Compute the mask cost and dice cost
         if self.with_mask:
             C += self._cost_mask(bs, gt_groups, masks, gt_mask)
+
+        # Set invalid values (NaNs and infinities) to 0 (fixes ValueError: matrix contains invalid numeric entries)
+        C[C.isnan() | C.isinf()] = 0.0
 
         C = C.view(bs, nq, -1).cpu()
 
