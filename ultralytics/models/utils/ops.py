@@ -68,17 +68,19 @@ class HungarianMatcher(nn.Module):
                 For each batch element, it holds:
                     len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
         """
-        bs, nq, nc = pred_scores.shape
+        bs = pred_scores.shape[0]
+        nq = pred_scores.shape[1]
+        nc = pred_scores.shape[2]
 
-        if sum(gt_groups) == 0:
+        if all(g == 0 for g in gt_groups):
             return [(torch.tensor([], dtype=torch.long), torch.tensor([], dtype=torch.long)) for _ in range(bs)]
 
         # We flatten to compute the cost matrices in a batch
         # [batch_size * num_queries, num_classes]
-        pred_scores = pred_scores.detach().view(-1, nc)
+        pred_scores = pred_scores.view(-1, nc).detach()
         pred_scores = F.sigmoid(pred_scores) if self.use_fl else F.softmax(pred_scores, dim=-1)
         # [batch_size * num_queries, 4]
-        pred_bboxes = pred_bboxes.detach().view(-1, 4)
+        pred_bboxes = pred_bboxes.view(-1, 4).detach()
 
         # Compute the classification cost
         pred_scores = pred_scores[:, gt_cls]
@@ -90,10 +92,10 @@ class HungarianMatcher(nn.Module):
             cost_class = -pred_scores
 
         # Compute the L1 cost between boxes
-        cost_bbox = (pred_bboxes.unsqueeze(1) - gt_bboxes.unsqueeze(0)).abs().sum(-1)  # (bs*num_queries, num_gt)
+        cost_bbox = torch.cdist(pred_bboxes, gt_bboxes, p=1)
 
         # Compute the GIoU cost between boxes, (bs*num_queries, num_gt)
-        cost_giou = 1.0 - bbox_iou(pred_bboxes.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True).squeeze(-1)
+        cost_giou = 1.0 - bbox_iou(pred_bboxes[:, None, :], gt_bboxes[None, :, :], xywh=True, GIoU=True)
 
         # Final cost matrix
         C = (
@@ -109,8 +111,10 @@ class HungarianMatcher(nn.Module):
         C[C.isnan() | C.isinf()] = 0.0
 
         C = C.view(bs, nq, -1).cpu()
+
         indices = [linear_sum_assignment(c[i]) for i, c in enumerate(C.split(gt_groups, -1))]
-        gt_groups = torch.as_tensor([0, *gt_groups[:-1]]).cumsum_(0)  # (idx for queries, idx for gt)
+        gt_groups = torch.as_tensor([0, *gt_groups[:-1]]).cumsum(0)
+
         return [
             (torch.tensor(i, dtype=torch.long), torch.tensor(j, dtype=torch.long) + gt_groups[k])
             for k, (i, j) in enumerate(indices)
