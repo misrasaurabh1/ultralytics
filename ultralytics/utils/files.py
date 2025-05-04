@@ -137,14 +137,18 @@ def increment_path(path, exist_ok=False, sep="", mkdir=False):
     """
     path = Path(path)  # os-agnostic
     if path.exists() and not exist_ok:
-        path, suffix = (path.with_suffix(""), path.suffix) if path.is_file() else (path, "")
+        path_base, suffix = (path.with_suffix(""), path.suffix) if path.is_file() else (path, "")
 
-        # Method 1
-        for n in range(2, 9999):
-            p = f"{path}{sep}{n}{suffix}"  # increment path
-            if not os.path.exists(p):
-                break
-        path = Path(p)
+        # Method using binary search
+        low, high = 2, 9999
+        while low < high:
+            mid = (low + high) // 2
+            p = f"{path_base}{sep}{mid}{suffix}"
+            if os.path.exists(p):
+                low = mid + 1
+            else:
+                high = mid
+        path = Path(f"{path_base}{sep}{low}{suffix}")
 
     if mkdir:
         path.mkdir(parents=True, exist_ok=True)  # make directory
